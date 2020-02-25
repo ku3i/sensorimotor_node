@@ -16,7 +16,7 @@ volatile bool paused = true;
 
 
 
-typedef jetpack::sensorimotor_core<jetpack::PWM_Servo> core_t;
+typedef jetpack::sensorimotor_core core_t;
 
 core_t core;
 
@@ -26,11 +26,10 @@ jetpack::communication_ctrl<core_t> com(core);
 void setup() {
   Serial.begin(rs485::baudrate);
 
-  button::begin();
-  led::begin();
-  rs485::begin();
-  core.init_sensors();
-  
+  button::init();
+  led   ::init();
+  rs485 ::init();
+  core   .init();
 }
 
 void loop() {

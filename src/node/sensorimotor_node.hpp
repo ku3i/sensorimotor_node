@@ -34,7 +34,9 @@
 #define CAPRET0 8
 #define CAPRET1 12
 
-
+namespace constants {
+  const uint8_t num_neopix = 16;
+}
 /*
     use new command codes, that do not interfere with sensorimotors
 
@@ -68,7 +70,7 @@ namespace led
 
     void off() { digitalWrite(led_pin, LOW); }
 
-    void begin() {
+    void init() {
         pinMode(led_pin, OUTPUT);
         off();
     }
@@ -79,7 +81,7 @@ namespace button
 {
     const uint8_t button_pin = 4;
 
-    void begin() {
+    void init() {
         pinMode(button_pin, INPUT_PULLUP);
     }
 
@@ -112,7 +114,7 @@ namespace rs485
         digitalWrite(read_disable, LOW);
     }
 
-    void begin() {
+    void init() {
         pinMode(drive_enable, OUTPUT);
         pinMode(read_disable, OUTPUT);
         Serial.begin(1000000);

@@ -11,6 +11,7 @@
 
 #include <Arduino.h>
 #include <PWMServo.h>
+#include <Adafruit_NeoPixel.h>
 #include "jcl_capsense.hpp"
 #include "rangef.h"
 
@@ -37,16 +38,16 @@ CapSense cap1 = CapSense(CAPSEND,CAPRET1);
 
 class Sensors {
 public:
-	  uint8_t position[4] = {0,0,0,0};
-	  uint8_t luminous[2] = {0,0};
-	  uint8_t capacity[2] = {0,0};
+    uint8_t position[4] = {0,0,0,0};
+    uint8_t luminous[2] = {0,0};
+    uint8_t capacity[2] = {0,0};
     uint16_t distance = 0;
-    //uint16_t mpu_x   = 0;
-	  //uint16_t mpu_y   = 0;
+
 
     Rangefinder rangef;
+    //TODO: MPU
 
-	  Sensors() { }
+    Sensors() { }
 
     void init() { rangef.init(); }
 
@@ -72,33 +73,85 @@ public:
 
 
 
-class PWM_Servo {
+class NodeServo {
   uint8_t pin = 0;
   PWMServo motor;
   bool is_enabled = false;
 
 public:
 
-  PWM_Servo(uint8_t pin) : pin(pin) {}
+  NodeServo(uint8_t pin) : pin(pin) { pinMode(pin, INPUT_PULLUP);}
   void set_pwm(uint8_t dc) { motor.write(dc); }
   void enable() { if (is_enabled) return; motor.attach(pin); is_enabled = true; }
-  void disable() { if (!is_enabled) return; motor.detach(); is_enabled = false;}
+  void disable() { if (!is_enabled) return; motor.detach(); pinMode(pin, INPUT_PULLUP); is_enabled = false;}
 };
 
 
+class NodeEsc {
+  uint8_t pin = 0;
+  PWMServo motor;
+  bool is_enabled = false;
+
+public:
+
+  NodeEsc(uint8_t pin) : pin(pin) {
+    // arming
+    motor.attach(pin, 500, 1000);
+    motor.write(0);
+  }
+
+  void set_pwm(uint8_t dc) { motor.write(dc); }
+
+  void enable() {
+    if (is_enabled) return;
+    motor.attach(pin, 990, 1500);
+    is_enabled = true;
+  }
+
+  void disable() { if (!is_enabled) return; motor.detach(); pinMode(pin, INPUT_PULLUP); is_enabled = false;}
+};
 
 
-template <typename MotorDriverType>
+class NodePix {
+  uint8_t pin = 0;
+  Adafruit_NeoPixel strip;
+
+public:
+
+  NodePix(uint8_t pin)
+  : pin(pin)
+  , strip(constants::num_neopix, pin, NEO_RGB + NEO_KHZ800)
+  {}
+
+  void init(void) { strip.begin(); strip.show(); }
+
+  void set_color(uint8_t val, uint8_t px = 0xff) {
+    if (px < constants::num_neopix)
+      strip.setPixelColor(px, strip.Color(val, val, val));
+    else if (0xff == px)
+    {
+          strip.fill(strip.Color(val, val, val), 0, constants::num_neopix);
+    }
+  }
+
+  void step() { strip.show(); }
+
+  void disable(void) { strip.clear(); }
+};
+
 class sensorimotor_core {
 
   bool enabled;
 
   Sensors          sensors;
-  PWM_Servo        motor[4];
+  NodeServo        srv;
+  //NodeEsc          esc;
+  NodePix          pix;
+
   uint8_t          target[4];
 
   uint8_t          watchcat = 0;
-  uint8_t const    def_pwm = 90;
+  //uint8_t const    def_pwm = 90;
 
 public:
 
@@ -106,28 +159,34 @@ public:
   : enabled(false)
   , target()
   , sensors()
-  , motor({PWM_0,PWM_1,PWM_2,PWM_3})
+  , srv(PWM_0)
+  //, esc(PWM_1)
+  , pix(PWM_2)
   {
   }
 
     void apply_target_values(void) {
         if (enabled) {
-            for (uint8_t i = 0; i<2; ++i) {
-              motor[i].set_pwm(target[i]);
-              motor[i].enable();
-            }
+          srv.set_pwm(target[0]);
+          //esc.set_pwm(target[1]);
+
+          srv.enable();
+          //esc.enable();
+
+          pix.set_color(target[2]);//, target[3]);
+
         } else { /*disabled*/
-          for (uint8_t i = 0; i<2; ++i) {
-            motor[i].disable();
-          }
+          srv.disable();
+          //esc.disable();
+          pix.disable();
         }
     }
 
-    void init_sensors(void) { sensors.init(); }
+    void init(void) { sensors.init(); pix.init(); }
 
     void step_mot(void) {
       apply_target_values();
-
+      pix.step();
       /* safety switchoff */
       if (watchcat < 100) watchcat++;
       else enabled = false;
