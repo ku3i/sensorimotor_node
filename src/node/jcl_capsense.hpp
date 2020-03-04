@@ -18,7 +18,7 @@ public:
 
   float x=.0f,y,b=.0f,w;
   const uint8_t NREAD = 1; /* each reading approx. takes 0.3 ms */
-  const unsigned timeout_ms = 10; /* 2000 is default */
+  const unsigned timeout_ms = 1; /* 2000 is default */
   const float eta = 0.005f;
   const float eta_w = .0000005;
   const float lp = 0.1f;

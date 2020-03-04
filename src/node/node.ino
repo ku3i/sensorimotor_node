@@ -3,8 +3,7 @@
 #include "core.hpp"
 
 
-
-#define WAIT_US 10000 /* 1kHz loop */
+#define IDLE_TIMEOUT_US 20000 /* 50Hz main loop in idle */
 
 /* timing */
 unsigned long timestamp = 0;
@@ -13,8 +12,6 @@ unsigned long cycles = 0;
 /* button state */
 bool pressed = false;
 volatile bool paused = true;
-
-
 
 typedef jetpack::sensorimotor_core core_t;
 
@@ -30,22 +27,28 @@ void setup() {
   led   ::init();
   rs485 ::init();
   core   .init();
+  pinMode(3, OUTPUT);
 }
 
 void loop() {
 
+  digitalWrite(3, HIGH);
   core.step_sen();
-  com.step();
+
+  digitalWrite(3, LOW);
+  delayMicroseconds(2);
+  digitalWrite(3, HIGH);
+
   core.step_mot();
- 
-  //supreme::adc::restart();
+  digitalWrite(3, LOW);
   ++cycles;
 
 
   /* loop delay, wait until timer signals next 1ms slot is done */
   do {
     com.step();
-  } while(micros() - timestamp < WAIT_US);
+    delayMicroseconds(1);
+  } while(!com.check_and_reset_loop_sync() && (micros() - timestamp < IDLE_TIMEOUT_US));
   timestamp = micros();
 }
 

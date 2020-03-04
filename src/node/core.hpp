@@ -11,10 +11,10 @@
 
 #include <Arduino.h>
 #include <PWMServo.h>
-#include <Adafruit_NeoPixel.h>
+#include "neopixel.hpp"
 #include "jcl_capsense.hpp"
 #include "rangef.h"
-
+#include "adc.hpp"
 #include "sensorimotor_node.hpp"
 #include "assert.hpp"
 
@@ -49,22 +49,41 @@ public:
 
     Sensors() { }
 
-    void init() { rangef.init(); }
+    void init() {
+        supreme::adc::init();
+        supreme::adc::restart();
+        rangef.init();
+    }
 
-    uint8_t readpin(uint8_t pin) { return analogRead(pin) >> 2; } // 10 -> 8 bit
+    //uint8_t readpin(uint8_t pin) { return analogRead(pin) >> 2; } // 10 -> 8 bit
 
-	  void step(void)
-	  {
-        position[0] = readpin(POTI_0);
-        position[1] = readpin(POTI_1);
-        position[2] = readpin(POTI_2);
-        position[3] = readpin(POTI_3);
+    void step(void)
+    {
+        position[0] = supreme::adc::result[supreme::adc::poti_0] >> 2;
+        position[1] = supreme::adc::result[supreme::adc::poti_1] >> 2;
+        position[2] = supreme::adc::result[supreme::adc::poti_2] >> 2;
+        position[3] = supreme::adc::result[supreme::adc::poti_3] >> 2;
 
-        luminous[0] = readpin(BRGT_0);
-        luminous[1] = readpin(BRGT_1);
+        luminous[0] = supreme::adc::result[supreme::adc::brgt_0] >> 2;
+        luminous[1] = supreme::adc::result[supreme::adc::brgt_1] >> 2;
+
+        supreme::adc::restart();
+
+        digitalWrite(3, LOW);
+        delayMicroseconds(2);
+        digitalWrite(3, HIGH);
 
         capacity[0] = 127*cap0.step() + 128;
+
+        digitalWrite(3, LOW);
+        delayMicroseconds(2);
+        digitalWrite(3, HIGH);
+
         capacity[1] = 127*cap1.step() + 128;
+
+        digitalWrite(3, LOW);
+        delayMicroseconds(2);
+        digitalWrite(3, HIGH);
 
         rangef.step();
         distance = rangef.dx;
@@ -74,9 +93,9 @@ public:
 
 
 class NodeServo {
-  uint8_t pin = 0;
-  PWMServo motor;
-  bool is_enabled = false;
+    uint8_t pin = 0;
+    PWMServo motor;
+    bool is_enabled = false;
 
 public:
 
@@ -94,76 +113,78 @@ class NodeEsc {
 
 public:
 
-  NodeEsc(uint8_t pin) : pin(pin) {
-    // arming
-    motor.attach(pin, 500, 1000);
-    motor.write(0);
-  }
+    NodeEsc(uint8_t pin)
+    : pin(pin)
+    {
+        // arming
+        motor.attach(pin, 500, 1000);
+        motor.write(0);
+    }
 
-  void set_pwm(uint8_t dc) { motor.write(dc); }
+    void set_pwm(uint8_t dc) { motor.write(dc); }
 
-  void enable() {
-    if (is_enabled) return;
-    motor.attach(pin, 990, 1500);
-    is_enabled = true;
-  }
+    void enable() {
+        if (is_enabled) return;
+        motor.attach(pin, 990, 1500);
+        is_enabled = true;
+    }
 
-  void disable() { if (!is_enabled) return; motor.detach(); pinMode(pin, INPUT_PULLUP); is_enabled = false;}
+    void disable() {
+        if (!is_enabled) return;
+        motor.detach();
+        pinMode(pin, INPUT_PULLUP);
+        is_enabled = false;
+    }
 };
 
 
+//TODO: this needs to be improved
+template <unsigned DATA_PIN>
 class NodePix {
-  uint8_t pin = 0;
-  Adafruit_NeoPixel strip;
-
 public:
 
-  NodePix(uint8_t pin)
-  : pin(pin)
-  , strip(constants::num_neopix, pin, NEO_RGB + NEO_KHZ800)
-  {}
-
-  void init(void) { strip.begin(); strip.show(); }
-
-  void set_color(uint8_t val, uint8_t px = 0xff) {
-    if (px < constants::num_neopix)
-      strip.setPixelColor(px, strip.Color(val, val, val));
-    else if (0xff == px)
+    NodePix()
     {
-          strip.fill(strip.Color(val, val, val), 0, constants::num_neopix);
+        ledsetup();
     }
-  }
 
-  void step() { strip.show(); }
+    void init(void) { showColor(64, 32, 64); delay(500); showColor(0, 0, 0); }
 
-  void disable(void) { strip.clear(); }
+    void set_color(uint8_t val) { showColor(val, val, val); }
+
+    void step() {
+        /* remember time of last write and wait until latch time,
+         * otherwise too frequent calls of step will not work.
+         * Alternatively use: show() (which basically waits the needed time. */
+    }
+
+    void disable(void) { set_color(0); }
+
 };
 
 class sensorimotor_core {
 
-  bool enabled;
+    bool enabled;
 
-  Sensors          sensors;
-  NodeServo        srv;
-  //NodeEsc          esc;
-  NodePix          pix;
+    Sensors          sensors;
+    NodeServo        srv;
+    //NodeEsc          esc;
+    NodePix<PWM_2>   pix;
 
-  uint8_t          target[4];
-
-  uint8_t          watchcat = 0;
-  //uint8_t const    def_pwm = 90;
+    uint8_t          target[4];
+    uint8_t          watchcat = 0;
 
 public:
 
-  sensorimotor_core()
-  : enabled(false)
-  , target()
-  , sensors()
-  , srv(PWM_0)
-  //, esc(PWM_1)
-  , pix(PWM_2)
-  {
-  }
+    sensorimotor_core()
+    : enabled(false)
+    , target()
+    , sensors()
+    , srv(PWM_0)
+    //, esc(PWM_1)
+    , pix()
+    {
+    }
 
     void apply_target_values(void) {
         if (enabled) {
@@ -185,20 +206,20 @@ public:
     void init(void) { sensors.init(); pix.init(); }
 
     void step_mot(void) {
-      apply_target_values();
-      pix.step();
-      /* safety switchoff */
-      if (watchcat < 100) watchcat++;
-      else enabled = false;
+        apply_target_values();
+        pix.step();
+        /* safety switchoff */
+        if (watchcat < 100) watchcat++;
+        else enabled = false;
     }
 
     void step_sen(void) {
-      sensors.step();
+        sensors.step();
     }
 
     void set_target_pwm(uint8_t pwm[4]) {
-      for (uint8_t i = 0; i<4; ++i)
-        target[i] = pwm[i];
+        for (uint8_t i = 0; i<4; ++i)
+            target[i] = pwm[i];
     }
 
     void enable()  { enabled = true; watchcat = 0; }
@@ -216,3 +237,4 @@ public:
 } /* namespace jetpack */
 
 #endif /* JETPACK_SENSORIMOTOR_CORE_HPP */
+

@@ -37,24 +37,19 @@
 namespace constants {
   const uint8_t num_neopix = 16;
 }
-/*
-    use new command codes, that do not interfere with sensorimotors
 
-    sensors:
-    + poti 0 2byte each
-    + poti 1
-    + poti 2
-    + poti 3
 
-    + MPU 12 bytes 6x2
-    + Tof 2 bytes
-    + capsense 4 bytes 2x2
+//float readpin(uint8_t pin) { return analogRead(pin) / 1023.f; }
 
-    + light 2x2
+namespace adc_channel {
+  const uint8_t poti_0 = 0,
+                poti_1 = 1,
+                poti_2 = 2,
+                poti_3 = 3,
+                brgt_0 = 6,
+                brgt_1 = 7;
+}
 
-*/
-
-float readpin(uint8_t pin) { return analogRead(pin) / 1023.f; }
 
 namespace led
 {
@@ -66,7 +61,6 @@ namespace led
         else
             analogWrite(led_pin, pwm);
     }
-
 
     void off() { digitalWrite(led_pin, LOW); }
 
@@ -135,23 +129,13 @@ namespace rs485
             //led::off();
             return true;
         } else {
-            return false;           
+            return false;
         }
     }
 
 
-}; /* namespace rs485 */
+} /* namespace rs485 */
 
 
-namespace jetpack {
-
-class SensorimotorNode {
-public:
-};
-
-
-
-
-} /* namespace jetpack */
 
 #endif /* JETPACK_SENSORIMOTOR_NODE_HPP */
